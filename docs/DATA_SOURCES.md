@@ -1,8 +1,7 @@
-# Graduation Project Data Sources
+# Data Sources
 
 Default enabled sources: GitHub REST API, Hugging Face Hub API, DEV Community API,
-Hacker News API, and arXiv API. Legacy hot-list, RSS and GitHub HTML collectors
-have been removed, including their registry entries and configuration blocks.
+Hacker News API, and arXiv API.
 Unknown source codes are rejected during connector construction and data intake.
 
 Repeated collection retains immutable observation snapshots: changed rank,
@@ -17,7 +16,7 @@ configuration. A model/dimension mismatch blocks vector use until a complete
 index rebuild. Old vectors marked `unverified:` are excluded from retrieval;
 keyword search remains available until the complete index is rebuilt.
 
-## New collectors
+## Metadata Collectors
 
 - GitHub: https://docs.github.com/en/rest/search/search#search-repositories
   AI-topic repositories pushed within 30 days, sorted by total stars.
