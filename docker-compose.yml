@@ -1,0 +1,53 @@
+﻿services:
+  mysql:
+    image: mysql:8.0
+    container_name: hotspot-agent-mysql
+    restart: unless-stopped
+    environment:
+      # P0-4: 密码通过 .env 注入，不再硬编码到 compose 文件中。
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root123456}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-hotspot_agent}
+      MYSQL_USER: ${MYSQL_USER:-hotspot}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-hotspot123}
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-3307}:3306"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - hotspot_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-root123456}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: hotspot-agent-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6380}:6379"
+    volumes:
+      - hotspot_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:v1.18.2@sha256:75eab8c4ba42096724fdcfde8b4de0b5713d529dde32f285a1f86fdcb2c9e50c
+    container_name: hotspot-agent-qdrant
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${QDRANT_PORT:-6333}:6333"
+      - "127.0.0.1:${QDRANT_GRPC_PORT:-6334}:6334"
+    volumes:
+      - hotspot_qdrant_data:/qdrant/storage
+
+volumes:
+  hotspot_mysql_data:
+  hotspot_redis_data:
+  hotspot_qdrant_data:

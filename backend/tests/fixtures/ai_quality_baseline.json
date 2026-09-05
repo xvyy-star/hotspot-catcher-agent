@@ -1,0 +1,201 @@
+{
+  "schema_version": "1.0",
+  "dataset": {
+    "name": "hotspot-catcher-ai-quality",
+    "version": "2026-09-05.1",
+    "target_industry": "AI 产品、开发者工具与计算机行业情报",
+    "as_of_date": "2026-07-16"
+  },
+  "thresholds": {
+    "classification_accuracy": 0.9,
+    "ranking_pairwise_accuracy": 1.0,
+    "summary_fact_coverage": 1.0,
+    "citation_coverage": 1.0,
+    "summary_nonempty_rate": 1.0,
+    "unsupported_claim_rate": 0.0
+  },
+  "classification_cases": [
+    {
+      "id": "class-ai-model",
+      "event": {
+        "event_key": "class-ai-model",
+        "title": "OpenAI 发布新一代大模型，推理与训练能力升级",
+        "items": [{"source": "baidu", "source_name": "百度热榜", "title": "OpenAI 发布新一代大模型，推理与训练能力升级", "url": "https://example.com/class-ai", "captured_hours_ago": 1}],
+        "source_codes": ["baidu"],
+        "source_count": 1
+      },
+      "expected_category": "AI / 大模型"
+    },
+    {
+      "id": "class-open-source",
+      "event": {
+        "event_key": "class-open-source",
+        "title": "Python 开源安全框架发布 API 与 SDK",
+        "items": [{"source": "baidu", "source_name": "百度热榜", "title": "Python 开源安全框架发布 API 与 SDK", "url": "https://example.com/class-oss", "captured_hours_ago": 1}],
+        "source_codes": ["baidu"],
+        "source_count": 1
+      },
+      "expected_category": "开源技术"
+    },
+    {
+      "id": "class-tech-product",
+      "event": {
+        "event_key": "class-tech-product",
+        "title": "华为发布新一代鸿蒙手机和芯片",
+        "items": [{"source": "baidu", "source_name": "百度热榜", "title": "华为发布新一代鸿蒙手机和芯片", "url": "https://example.com/class-product", "captured_hours_ago": 1}],
+        "source_codes": ["baidu"],
+        "source_count": 1
+      },
+      "expected_category": "科技产品"
+    },
+    {
+      "id": "class-social",
+      "event": {
+        "event_key": "class-social",
+        "title": "台风导致多地停航和出行调整",
+        "items": [{"source": "baidu", "source_name": "百度热榜", "title": "台风导致多地停航和出行调整", "url": "https://example.com/class-social", "captured_hours_ago": 1}],
+        "source_codes": ["baidu"],
+        "source_count": 1
+      },
+      "expected_category": "社会民生"
+    },
+    {
+      "id": "class-business",
+      "event": {
+        "event_key": "class-business",
+        "title": "科技公司发布财报，营收与股价增长",
+        "items": [{"source": "baidu", "source_name": "百度热榜", "title": "科技公司发布财报，营收与股价增长", "url": "https://example.com/class-business", "captured_hours_ago": 1}],
+        "source_codes": ["baidu"],
+        "source_count": 1
+      },
+      "expected_category": "财经商业"
+    },
+    {
+      "id": "class-policy",
+      "event": {
+        "event_key": "class-policy",
+        "title": "工信部发布人工智能合规管理通知",
+        "items": [{"source": "baidu", "source_name": "百度热榜", "title": "工信部发布人工智能合规管理通知", "url": "https://example.com/class-policy", "captured_hours_ago": 1}],
+        "source_codes": ["baidu"],
+        "source_count": 1
+      },
+      "expected_category": "政策监管"
+    },
+    {
+      "id": "class-source-hint",
+      "event": {
+        "event_key": "class-source-hint",
+        "title": "通用工具链发布新版本",
+        "items": [{"source": "github", "source_name": "GitHub Trending", "title": "通用工具链发布新版本", "url": "https://github.com/example/toolchain", "captured_hours_ago": 1}],
+        "source_codes": ["github"],
+        "source_count": 1
+      },
+      "expected_category": "开源技术"
+    }
+  ],
+  "ranking_cases": [
+    {
+      "id": "rank-cross-source-confirmation",
+      "events": [
+        {
+          "event_key": "multi-source",
+          "title": "OpenAI Agent SDK 发布",
+          "items": [
+            {"source": "github", "source_name": "GitHub Trending", "title": "OpenAI Agent SDK 发布", "url": "https://github.com/example/agent-sdk", "rank": 5, "raw_hot_score": "2.1k", "captured_hours_ago": 1},
+            {"source": "hackernews", "source_name": "Hacker News", "title": "OpenAI Agent SDK 发布", "url": "https://news.ycombinator.com/item?id=100", "rank": 8, "raw_hot_score": "180", "captured_hours_ago": 1}
+          ],
+          "source_codes": ["github", "hackernews"],
+          "source_count": 2
+        },
+        {
+          "event_key": "single-source",
+          "title": "OpenAI Agent SDK 单一来源报道",
+          "items": [{"source": "github", "source_name": "GitHub Trending", "title": "OpenAI Agent SDK 单一来源报道", "url": "https://github.com/example/agent-sdk-note", "rank": 5, "raw_hot_score": "2.1k", "captured_hours_ago": 1}],
+          "source_codes": ["github"],
+          "source_count": 1
+        }
+      ],
+      "expected_order": ["multi-source", "single-source"]
+    },
+    {
+      "id": "rank-domain-relevance",
+      "events": [
+        {
+          "event_key": "domain-relevant",
+          "title": "OpenAI Agent 推理模型发布",
+          "items": [{"source": "baidu", "source_name": "百度热榜", "title": "OpenAI Agent 推理模型发布", "url": "https://example.com/rank-ai", "rank": 20, "captured_hours_ago": 1}],
+          "source_codes": ["baidu"],
+          "source_count": 1
+        },
+        {
+          "event_key": "generic-high-rank",
+          "title": "今日城市天气与出行提示",
+          "items": [{"source": "baidu", "source_name": "百度热榜", "title": "今日城市天气与出行提示", "url": "https://example.com/rank-generic", "rank": 1, "captured_hours_ago": 1}],
+          "source_codes": ["baidu"],
+          "source_count": 1
+        }
+      ],
+      "expected_order": ["domain-relevant", "generic-high-rank"]
+    },
+    {
+      "id": "rank-observed-heat",
+      "events": [
+        {
+          "event_key": "with-heat",
+          "title": "AI 芯片产品更新 A",
+          "items": [{"source": "ithome", "source_name": "IT之家", "title": "AI 芯片产品更新 A", "url": "https://example.com/rank-heat-a", "rank": 20, "raw_hot_score": "200万", "captured_hours_ago": 1}],
+          "source_codes": ["ithome"],
+          "source_count": 1
+        },
+        {
+          "event_key": "without-heat",
+          "title": "AI 芯片产品更新 B",
+          "items": [{"source": "ithome", "source_name": "IT之家", "title": "AI 芯片产品更新 B", "url": "https://example.com/rank-heat-b", "rank": 20, "captured_hours_ago": 1}],
+          "source_codes": ["ithome"],
+          "source_count": 1
+        }
+      ],
+      "expected_order": ["with-heat", "without-heat"]
+    }
+  ],
+  "generation_cases": [
+    {
+      "id": "summary-multisource-agent-sdk",
+      "event": {
+        "event_key": "summary-multisource-agent-sdk",
+        "title": "OpenAI 发布 Agent SDK 2.0",
+        "items": [
+          {"source": "github", "source_name": "GitHub Trending", "title": "OpenAI 发布 Agent SDK 2.0", "url": "https://github.com/example/agent-sdk-2", "rank": 3, "raw_hot_score": "3.2k", "captured_hours_ago": 1},
+          {"source": "hackernews", "source_name": "Hacker News", "title": "OpenAI 发布 Agent SDK 2.0", "url": "https://news.ycombinator.com/item?id=200", "rank": 6, "raw_hot_score": "250", "captured_hours_ago": 1}
+        ],
+        "source_codes": ["github", "hackernews"],
+        "source_count": 2,
+        "heat_score": 87.5,
+        "business_relevance": "HIGH",
+        "business_relevance_reason": "命中 AI Agent 与开发者工具主线。",
+        "rag_references": [{"document_id": 7, "document_title": "AI 产品趋势报告", "chunk_id": 31, "chunk_index": 3, "score": 0.92, "source": "knowledge_document", "preview": "Agent SDK 正在成为企业 AI 应用的基础设施。"}]
+      },
+      "required_summary_facts": ["OpenAI", "Agent SDK", "2.0"],
+      "forbidden_summary_claims": ["融资 10 亿元", "用户增长 300%"],
+      "required_evidence_urls": ["https://github.com/example/agent-sdk-2", "https://news.ycombinator.com/item?id=200"],
+      "required_rag_references": [{"document_title": "AI 产品趋势报告", "chunk_index": 3}]
+    },
+    {
+      "id": "summary-ai-chip",
+      "event": {
+        "event_key": "summary-ai-chip",
+        "title": "国产 AI 芯片推理性能升级",
+        "items": [{"source": "devto", "source_name": "DEV Community AI", "title": "国产 AI 芯片推理性能升级", "url": "https://example.com/ai-chip-source", "rank": 9, "raw_hot_score": "58万", "captured_hours_ago": 2}],
+        "source_codes": ["devto"],
+        "source_count": 1,
+        "heat_score": 72.25,
+        "business_relevance": "HIGH",
+        "business_relevance_reason": "命中 AI 算力与芯片主线。"
+      },
+      "required_summary_facts": ["AI 芯片", "推理性能", "升级"],
+      "forbidden_summary_claims": ["已量产 1000 万片", "市场份额达到 80%"],
+      "required_evidence_urls": ["https://example.com/ai-chip-source"],
+      "required_rag_references": []
+    }
+  ]
+}

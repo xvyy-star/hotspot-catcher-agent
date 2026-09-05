@@ -1,0 +1,93 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: hotspot-agent-prod-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-hotspot_agent}
+      MYSQL_USER: ${MYSQL_USER:-hotspot}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - hotspot_prod_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u\"$${MYSQL_USER}\" -p\"$${MYSQL_PASSWORD}\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: hotspot-agent-prod-redis
+    restart: unless-stopped
+    volumes:
+      - hotspot_prod_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  qdrant:
+    image: qdrant/qdrant:v1.18.2@sha256:75eab8c4ba42096724fdcfde8b4de0b5713d529dde32f285a1f86fdcb2c9e50c
+    container_name: hotspot-agent-prod-qdrant
+    restart: unless-stopped
+    volumes:
+      - hotspot_prod_qdrant_data:/qdrant/storage
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    container_name: hotspot-agent-prod-backend
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        format: raw
+    environment:
+      APP_ENV: production
+      APP_TIMEZONE: Asia/Shanghai
+      TZ: Asia/Shanghai
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-hotspot}:${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}@mysql:3306/${MYSQL_DATABASE:-hotspot_agent}?charset=utf8mb4
+      REDIS_URL: redis://redis:6379/1
+      QDRANT_URL: http://qdrant:6333
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
+      TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-1}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=5).read()\""]
+      interval: 15s
+      timeout: 8s
+      retries: 20
+      start_period: 30s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    container_name: hotspot-agent-prod-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  hotspot_prod_mysql_data:
+  hotspot_prod_redis_data:
+  hotspot_prod_qdrant_data:

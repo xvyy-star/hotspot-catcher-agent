@@ -1,0 +1,167 @@
+# 热点源配置样例
+#
+# 这个文件不是最终生产配置，而是为了说明企业级项目中应该如何管理不同平台源。
+# 后续代码会读取这个配置，决定启用哪些平台、每个平台权重是多少、每天采集多少条。
+
+schedule:
+  # 每天早上 8 点执行今日早报任务。
+  # 企业部署时可以改成 Quartz / XXL-JOB / crontab。
+  daily_briefing_cron: "0 0 8 * * ?"
+
+briefing:
+  # 产品定位：聚焦 AI / 计算机行业情报，不再混入泛热点场景。
+  # 核心用户：需要每天判断技术热点是否值得跟进的产品、研发、运营和内容负责人。
+  focus_modes:
+    - "computer_industry"
+    - "ai_product_intelligence"
+
+  # 真实数据模式：开启后，所有样例/模拟/无 item 级原文链接的数据都不会进入 raw_item / event / 早报。
+  # 失败源只在数据源健康页标记 FAILED，不伪装成真实采集成功。
+  real_data_only: true
+  allow_fallback_samples_in_report: false
+  evidence_policy: "ITEM_LEVEL_HTTP_URL_REQUIRED"
+  minimum_real_source_count: 3
+  minimum_real_item_count: 20
+
+  # 早报最多展示多少条重点热点。
+  top_n: 10
+
+  # LLM 深度分析最多处理多少条。
+  # 当前 Agnes 文本模型单次调用延迟约二十秒级，本地演示先只分析 Top 3。
+  # 企业部署时可以通过并发队列、缓存和成本预算把该值逐步调大。
+  llm_deep_analysis_limit: 3
+
+  # 默认关注行业，后续可以改成用户可配置。
+  target_industry: "AI / 计算机行业 / 开源技术 / 产品情报"
+
+knowledge:
+  # 热点分析阶段启用 RAG：
+  # 在 LLM / 规则分析前，先检索知识库和历史早报，补充“历史相似热点、业务关联度、引用依据”。
+  rag_enrichment_enabled: true
+  rag_enrichment_top_event_limit: 10
+  rag_enrichment_top_k: 3
+
+  # 调度任务生成早报成功后，自动把早报写入知识库，形成“历史热点记忆”。
+  # 现在手动点击“立即生成早报”、任务中心、定时器和历史重生成都可以按 trigger 配置自动入队。
+  auto_ingest_daily_briefing: true
+  auto_ingest_triggers:
+    - "manual"
+    - "scheduler"
+    - "task-center"
+    - "history-regenerate"
+
+  # 早报通常比普通文档结构化，chunk 可略大，减少碎片化。
+  chunk_size: 800
+  overlap: 120
+
+  # 幂等策略：
+  # - 同一天同内容：跳过重复向量写入。
+  # - 同一天内容变化：删除旧文档和旧向量，写入新版本。
+  duplicate_policy: "skip_same_content_replace_changed"
+
+sources:
+  - code: "github"
+    name: "GitHub AI Repositories"
+    enabled: true
+    weight: 0.78
+    max_items: 25
+    strategy: "official_api"
+    domains: ["computer_industry"]
+    source_url: "https://api.github.com/search/repositories"
+    note: "近30天更新的 AI 主题仓库，按累计 Star 排序；不是 Trending 或 Star 增量榜。"
+
+  - code: "huggingface"
+    name: "Hugging Face Models"
+    enabled: true
+    weight: 0.84
+    max_items: 20
+    strategy: "official_api"
+    domains: ["computer_industry", "ai_product_intelligence"]
+    source_url: "https://huggingface.co/api/models"
+    note: "公开模型元数据；按 Hub 下载量排序，不下载权重或数据集。"
+
+  - code: "devto"
+    name: "DEV Community AI & Computing"
+    enabled: true
+    weight: 0.72
+    max_items: 20
+    strategy: "official_api"
+    domains: ["computer_industry", "ai_product_intelligence"]
+    source_url: "https://dev.to/api/articles"
+    note: "近7日 programming 标签内容，覆盖 AI 开发及计算机技术实践，仅短摘录与互动指标。"
+
+  - code: "hackernews"
+    name: "Hacker News Top Stories"
+    enabled: true
+    weight: 0.76
+    max_items: 30
+    strategy: "official_api"
+    domains: ["computer_industry"]
+    source_url: "https://hacker-news.firebaseio.com/v0/topstories.json"
+    note: "官方 Firebase API，适合捕捉海外开发者和 AI 工具热点。"
+
+  - code: "arxiv_ai"
+    name: "arXiv CS/AI"
+    enabled: true
+    weight: 0.74
+    max_items: 20
+    strategy: "official_api"
+    domains: ["computer_industry"]
+    source_url: "https://export.arxiv.org/api/query"
+    note: "官方 API，覆盖 AI、计算机视觉、分布式、数据库、安全、操作系统及网络研究。"
+
+risk_rules:
+  # 命中这些关键词的热点需要提高风险等级。
+  high_risk_keywords:
+    - "事故"
+    - "灾难"
+    - "去世"
+    - "造谣"
+    - "诈骗"
+    - "维权"
+
+  # 企业内容不建议主动参与的类别。
+  blocked_categories:
+    - "高争议社会事件"
+    - "灾难事故"
+    - "未证实传闻"
+
+push:
+  # 推送通道：qq_bot 表示 QQ 机器人，使用 OneBot v11 HTTP API。
+  # 常见机器人框架：NapCat、Lagrange.OneBot、go-cqhttp、LiteLoaderQQNT OneBot 插件。
+  channel: "qq_bot"
+
+  # 是否开启自动推送。第一次本地演示先关闭，服务器配置好 QQ 机器人后改成 true。
+  # 也可通过环境变量 HOTSPOT_PUSH_ENABLED=true 覆盖。
+  enabled: false
+
+  # OneBot HTTP API 地址，服务器部署时改成你的 QQ 机器人 HTTP 地址。
+  # NapCat 常见示例：http://127.0.0.1:3000
+  # Lagrange.OneBot 常见示例：http://127.0.0.1:8080
+  # 也可通过环境变量 HOTSPOT_QQ_BOT_API_BASE 覆盖。
+  onebot_api_base: "http://127.0.0.1:3000"
+
+  # private：推送给某个 QQ；group：推送到 QQ 群。
+  # 也可通过 HOTSPOT_QQ_BOT_TARGET_TYPE 覆盖。
+  target_type: "private"
+
+  # target_type=private 时填写你的 QQ 号；可用 HOTSPOT_QQ_BOT_USER_ID 覆盖。
+  user_id: ""
+
+  # target_type=group 时填写群号；可用 HOTSPOT_QQ_BOT_GROUP_ID 覆盖。
+  group_id: ""
+
+  # OneBot access_token；没有设置鉴权可留空。可用 HOTSPOT_QQ_BOT_ACCESS_TOKEN 覆盖。
+  access_token: ""
+
+  # 推送失败重试次数。
+  retry_times: 3
+
+  # HTTP 调用超时。
+  timeout_seconds: 10
+
+  # QQ 文本消息最大长度，过长会截断。后续可升级为“早报图片”推送。
+  max_chars: 3500
+
+  # 是否允许推送失败时仍然认为早报生成成功。
+  allow_partial_success: true
