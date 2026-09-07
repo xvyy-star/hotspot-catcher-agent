@@ -92,6 +92,7 @@ class Settings:
     # P0-4: 默认值改为空字符串；生产环境未配置时启动校验会拒绝启动。
     # 开发环境可通过 .env 设置，测试环境通过 os.environ.setdefault 设置。
     api_auth_enabled: bool = _env_bool("API_AUTH_ENABLED", "true")
+    registration_enabled: bool = _env_bool("REGISTRATION_ENABLED", "true")
 
     # ADMIN_TOKEN 仅用于服务间 API 调用（非登录会话），不再从 login 接口返回。
     admin_token: str = os.getenv("ADMIN_TOKEN", "")
@@ -110,7 +111,9 @@ class Settings:
     # APP_SECRET_KEY 用于敏感字段加密；未配置时使用 ADMIN_TOKEN 兜底（仅限开发）。
     app_secret_key: str = os.getenv("APP_SECRET_KEY", "")
 
-    auth_exempt_paths: tuple[str, ...] = ("/api/system/status", "/api/auth/login")
+    auth_exempt_paths: tuple[str, ...] = (
+        "/api/system/status", "/api/auth/login", "/api/auth/register", "/api/auth/options",
+    )
     login_failure_limit: int = int(os.getenv("LOGIN_FAILURE_LIMIT", "5"))
     login_lock_seconds: int = int(os.getenv("LOGIN_LOCK_SECONDS", "300"))
 

@@ -4,7 +4,7 @@
     <div class="profile-page-header">
       <div class="header-titles">
         <h2 class="page-title">个人中心</h2>
-        <p class="page-desc">管理管理员身份凭据、密码安全、工作台偏好设置及 API 开发者配置</p>
+        <p class="page-desc">{{ profile?.display_name }} · {{ roleText }}</p>
       </div>
       <div class="header-actions">
         <button class="ghost-btn small-btn" type="button" :disabled="refreshing" @click="handleRefresh">
@@ -73,7 +73,7 @@
         <!-- Tab 切换导航 -->
         <div class="profile-tabs-nav">
           <button
-            v-for="tab in tabs"
+            v-for="tab in visibleTabs"
             :key="tab.key"
             type="button"
             class="tab-nav-btn"
@@ -101,7 +101,7 @@
                 <div class="form-group">
                   <label class="form-label">登录账号</label>
                   <input type="text" :value="profile?.username || 'admin'" disabled class="input-disabled" />
-                  <span class="form-hint">系统唯一管理员账号标识，不可更改</span>
+                  <span class="form-hint">账号标识创建后保持不变</span>
                 </div>
                 <div class="form-group">
                   <label class="form-label">显示昵称</label>
@@ -119,8 +119,8 @@
 
               <div class="form-grid-2">
                 <div class="form-group">
-                  <label class="form-label">管理员角色</label>
-                  <input type="text" :value="roleText + ' (最高权限管理)'" disabled class="input-disabled" />
+                  <label class="form-label">账号角色</label>
+                  <input type="text" :value="roleText" disabled class="input-disabled" />
                 </div>
                 <div class="form-group">
                   <label class="form-label">认证方式</label>
@@ -154,8 +154,8 @@
                   <select v-model="defaultPagePreference" class="select-control" @change="handleSavePreferences">
                     <option value="dashboard">今日简报 (今日情报重点概览)</option>
                     <option value="events">热点事件池</option>
-                    <option value="dataBoard">数据看板 (系统监控大屏)</option>
-                    <option value="knowledgeQa">智能问答 (专题知识库智能体)</option>
+                    <option v-if="isAdmin" value="dataBoard">数据看板 (系统监控大屏)</option>
+                    <option v-if="isAdmin" value="knowledgeQa">智能问答 (专题知识库智能体)</option>
                     <option value="history">简报归档 (历史归档中心)</option>
                   </select>
                   <span class="form-hint">每次登录或进入工作台时，将自动为您打开该模块</span>
@@ -183,7 +183,7 @@
             <div class="panel-head">
               <div class="panel-head-titles">
                 <h4>修改登录密码</h4>
-                <p>定期更新管理员密码可显著提升系统安全，新密码需不少于 6 位</p>
+                <p>新密码至少 8 位，修改后需重新登录</p>
               </div>
             </div>
 
@@ -194,7 +194,7 @@
                   <input
                     v-model="passwordForm.oldPassword"
                     :type="showOldPassword ? 'text' : 'password'"
-                    placeholder="请输入当前正在生效的管理员密码"
+                    placeholder="请输入当前密码"
                     required
                     class="input-control font-mono"
                   />
@@ -211,7 +211,7 @@
                     <input
                       v-model="passwordForm.newPassword"
                       :type="showNewPassword ? 'text' : 'password'"
-                      placeholder="设置新密码 (不少于 6 位)"
+                      placeholder="设置新密码 (不少于 8 位)"
                       required
                       minlength="6"
                       class="input-control font-mono"
@@ -379,12 +379,12 @@
             <div class="panel-head">
               <div class="panel-head-titles">
                 <h4>系统权限范围与能力</h4>
-                <p>当前管理员身份 ({{ roleText }}) 拥有的系统功能操作授权清单</p>
+                <p>{{ roleText }}</p>
               </div>
             </div>
 
             <div class="permission-cards-grid">
-              <div v-for="scope in permissionScopes" :key="scope.key" class="permission-scope-card">
+              <div v-for="scope in visibleScopes" :key="scope.key" class="permission-scope-card">
                 <div class="scope-header">
                   <div class="scope-icon-box"><component :is="scope.icon" /></div>
                   <div class="scope-titles">
@@ -410,7 +410,7 @@
           <div class="modal-icon warning"><LogOut /></div>
           <div>
             <h4>确认退出登录？</h4>
-            <p>退出后当前浏览器会话将被吊销，再次使用需重新输入管理员密码。</p>
+            <p>退出后当前浏览器会话将被吊销，再次使用需重新登录。</p>
           </div>
         </div>
         <div class="modal-actions">
@@ -450,6 +450,7 @@ import {
 
 import {
   changeAdminPassword,
+  hasAdminAccess,
   clearStoredAdminToken,
   getStoredAdminToken,
   getStoredDefaultPage,
@@ -510,10 +511,13 @@ const passwordForm = reactive({
 
 // 计算属性
 const security = computed(() => props.profile?.login_security)
+const isAdmin = computed(() => hasAdminAccess(props.profile))
+const visibleTabs = computed(() => isAdmin.value ? tabs : tabs.filter(tab => tab.key !== 'api'))
 const roleText = computed(() => {
-  const role = props.profile?.role || 'owner'
+  const role = props.profile?.role || 'user'
   if (role === 'owner') return '系统所有者'
   if (role === 'admin') return '系统管理员'
+  if (role === 'user') return '普通用户'
   return role
 })
 const authModeText = computed(() => {
@@ -523,7 +527,7 @@ const authModeText = computed(() => {
 })
 
 // Token 显示与脱敏
-const currentToken = computed(() => getStoredAdminToken() || 'hc_adm_session_live_key')
+const currentToken = computed(() => getStoredAdminToken())
 const maskedToken = computed(() => {
   const t = currentToken.value
   if (!t || t.length < 8) return 'hc_***'
@@ -543,7 +547,7 @@ const passwordStrength = computed(() => {
   const pwd = passwordForm.newPassword
   if (!pwd) return 0
   let score = 0
-  if (pwd.length >= 6) score += 1
+  if (pwd.length >= 8) score += 1
   if (pwd.length >= 10) score += 1
   if (/[0-9]/.test(pwd) && /[a-zA-Z]/.test(pwd)) score += 1
   if (/[^a-zA-Z0-9]/.test(pwd)) score += 1
@@ -596,12 +600,19 @@ const permissionScopes = [
   },
 ]
 
+const visibleScopes = computed(() => isAdmin.value ? permissionScopes : [{
+  key: 'reader', title: '情报阅读与个人反馈', icon: Newspaper,
+  description: '今日情报、热点池与简报归档',
+  tags: ['阅读情报', '个人收藏', '个人反馈', '个人资料'],
+}])
+
 // 初始化
 onMounted(() => {
   if (props.profile?.display_name) {
     displayNameInput.value = props.profile.display_name
   }
   defaultPagePreference.value = getStoredDefaultPage()
+  if (!isAdmin.value && !['dashboard', 'events', 'history', 'feedbackRecords', 'profile'].includes(defaultPagePreference.value)) defaultPagePreference.value = 'dashboard'
   refreshIntervalPreference.value = getStoredRefreshInterval()
 })
 
@@ -643,6 +654,10 @@ function handleSavePreferences() {
 // 修改密码
 async function handleChangePassword() {
   if (passwordMismatch.value) return
+  if (passwordForm.newPassword.length < 8 || new TextEncoder().encode(passwordForm.newPassword).length > 72) {
+    emit('error', '密码至少 8 位，UTF-8 编码长度至多 72 字节。')
+    return
+  }
   changingPassword.value = true
   try {
     const res = await changeAdminPassword({
@@ -654,6 +669,8 @@ async function handleChangePassword() {
     passwordForm.oldPassword = ''
     passwordForm.newPassword = ''
     passwordForm.confirmPassword = ''
+    clearStoredAdminToken()
+    emit('logout')
   } catch (err: any) {
     emit('error', err.response?.data?.detail || err.message || '修改密码失败')
   } finally {

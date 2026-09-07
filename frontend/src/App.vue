@@ -31,9 +31,9 @@
         </div>
       </div>
       <nav class="nav-list">
-        <template v-for="(item, index) in navItems" :key="item.key">
+        <template v-for="(item, index) in visibleNavItems" :key="item.key">
           <div
-            v-if="index === 0 || item.group !== navItems[index - 1]?.group"
+            v-if="index === 0 || item.group !== visibleNavItems[index - 1]?.group"
             class="nav-section-label"
           >
             {{ item.group === 'core' ? '核心工作台' : '管理与诊断' }}
@@ -87,7 +87,7 @@
             <RefreshCw :class="{ spinning: loading }" /> 刷新
           </button>
           <button
-            v-if="activePage === 'dashboard' || activePage === 'events' || activePage === 'history' || activePage === 'setup'"
+            v-if="isAdmin && ['dashboard', 'events', 'history', 'setup'].includes(activePage)"
             class="primary-btn"
             type="button"
             :disabled="generating"
@@ -105,7 +105,7 @@
           <div :key="activePage">
             <!-- Dashboard Page -->
             <section v-if="activePage === 'dashboard'">
-              <div class="decision-hero card">
+              <div v-if="isAdmin" class="decision-hero card">
                 <div class="decision-copy">
                   <span class="section-label">今日概览</span>
                   <h2>{{ todayBriefing ? '今日早报已生成' : '今日早报待生成' }}</h2>
@@ -118,14 +118,9 @@
                 <button class="ghost-btn" type="button" :disabled="loading" @click="switchPage('events')">
                   <Flame /> 查看热点池
                 </button>
-                <div class="decision-score">
-                  <span :class="['badge', deliveryGrade.level]">{{ deliveryGrade.label }}</span>
-                  <strong>{{ deliveryGrade.score }}</strong>
-                  <small>{{ deliveryGrade.hint }}</small>
-                </div>
               </div>
 
-              <div class="insight-grid">
+              <div v-if="isAdmin" class="insight-grid">
                 <div v-for="item in executiveInsights" :key="item.title" class="insight-card">
                   <div :class="['insight-icon', item.tone]">
                     <component :is="item.icon" />
@@ -137,7 +132,7 @@
                 </div>
               </div>
 
-              <div v-if="setupCompletion.percent < 100" class="setup-nudge">
+              <div v-if="isAdmin && setupCompletion.percent < 100" class="setup-nudge">
                 <div>
                   <b>{{ setupNudgeTitle }}</b>
                   <p>{{ setupNudgeDesc }}</p>
@@ -145,7 +140,7 @@
                 <button class="ghost-btn" type="button" @click="switchPage('setup')">打开首次引导</button>
               </div>
 
-              <div class="stat-grid">
+              <div v-if="isAdmin" class="stat-grid">
                 <div class="card stat-card card-blue">
                   <p class="stat-label"><Newspaper /> 今日早报</p>
                   <p class="stat-value">{{ todayBriefing ? statusLabel(todayBriefing.status) : '未生成' }}</p>
@@ -185,7 +180,7 @@
                       <div>
                         <span class="section-label">{{ todayBriefing ? '今日简报' : '事件预览' }}</span>
                         <h2>{{ todayBriefing ? '今日热点情报' : '热点池预览（尚未生成今日早报）' }}</h2>
-                        <p>{{ todayBriefing ? '卡片化展示结论、证据链接、可信度和建议动作；复制/推送仍使用完整 Markdown。' : '以下为数据库中的最近真实事件，仅用于预览；生成今日早报后才可复制、推送或写入知识库。' }}</p>
+                        <p v-if="isAdmin">{{ todayBriefing ? '卡片化展示结论、证据链接、可信度和建议动作；复制/推送仍使用完整 Markdown。' : '以下为数据库中的最近真实事件，仅用于预览；生成今日早报后才可复制、推送或写入知识库。' }}</p>
                       </div>
                       <div class="intelligence-actions">
                         <span :class="['badge', todayBriefing ? 'low' : 'medium']">
@@ -198,7 +193,7 @@
                     <div v-if="!intelligenceCards.length" class="empty-intelligence">
                       <Newspaper />
                       <b>暂无今日情报</b>
-                      <p>点击右上角“生成今日早报”，系统只会展示带原文链接的真实公开数据；样例、模拟和无出处数据会被拦截。</p>
+                      <p>{{ isAdmin ? '点击右上角生成今日早报。' : '暂无可查看的情报。' }}</p>
                     </div>
 
                     <div v-else class="intelligence-list">
@@ -282,10 +277,10 @@
 
                     <div class="provider-actions intelligence-bottom-actions">
                       <button class="ghost-btn" type="button" :disabled="!todayBriefing" @click="copyText(briefingMarkdown)"><FileText /> 复制</button>
-                      <button class="ghost-btn" type="button" :disabled="!todayBriefing || pushing" @click="handlePush">
+                      <button v-if="isAdmin" class="ghost-btn" type="button" :disabled="!todayBriefing || pushing" @click="handlePush">
                         <Send /> {{ pushing ? '推送中...' : '推送 QQ 机器人' }}
                       </button>
-                      <button class="ghost-btn" type="button" :disabled="!todayBriefing" @click="handleIngestLatest"><UploadCloud /> 写入知识库</button>
+                      <button v-if="isAdmin" class="ghost-btn" type="button" :disabled="!todayBriefing" @click="handleIngestLatest"><UploadCloud /> 写入知识库</button>
                     </div>
                   </div>
                 </div>
@@ -517,7 +512,7 @@
                         <Code style="width: 13px; height: 13px;" /> 源码
                       </button>
                     </div>
-                    <button class="ghost-btn small-btn" type="button" :disabled="!selectedHistoryDate" @click="handleRegenerateHistory">
+                    <button v-if="isAdmin" class="ghost-btn small-btn" type="button" :disabled="!selectedHistoryDate" @click="handleRegenerateHistory">
                       <RefreshCw style="width: 13px; height: 13px;" /> 重生成
                     </button>
                     <button class="primary-btn small-btn" type="button" :disabled="!selectedBriefing" @click="copyText(selectedBriefing?.markdown || '')">
@@ -653,6 +648,8 @@
 
             <!-- Profile Page -->
             <ProfilePage v-else-if="activePage === 'profile'" :profile="currentUser" @logout="handleLogout" @refresh="refreshProfile" @message="setMessage" @error="setError" @set-loading="loading = $event" />
+
+            <UsersPage v-else-if="activePage === 'users' && isAdmin" ref="usersPageRef" @message="setMessage" @error="setError" @set-loading="loading = $event" />
 
             <!-- Ingest Runs Page -->
             <RunTable v-else-if="activePage === 'runs'" :runs="runs" :ingestRuns="ingestRuns" />
@@ -1407,6 +1404,7 @@ const FeedbackRecordsPage = defineAsyncComponent(() => import('@/views/FeedbackR
 const SystemLogPage = defineAsyncComponent(() => import('@/views/SystemLogPage.vue'))
 const LoginPage = defineAsyncComponent(() => import('@/views/LoginPage.vue'))
 const ProfilePage = defineAsyncComponent(() => import('@/views/ProfilePage.vue'))
+const UsersPage = defineAsyncComponent(() => import('@/views/UsersPage.vue'))
 import ThemeToggle from '@/components/ThemeToggle.vue'
 
 import dayjs from 'dayjs'
@@ -1526,6 +1524,7 @@ import {
 
 
   getStoredAdminToken,
+  hasAdminAccess,
 } from '@/api/hotspot'
 
 
@@ -1590,7 +1589,7 @@ import type {
 
 
 
-type NavKey = 'dashboard' | 'setup' | 'dataBoard' | 'feedbackRecords' | 'events' | 'history' | 'knowledge' | 'knowledgeQa' | 'sourceHealth' | 'systemLogs' | 'profile' | 'runs' | 'scheduler' | 'modelStats' | 'pushConfig' | 'models'
+type NavKey = 'dashboard' | 'setup' | 'dataBoard' | 'feedbackRecords' | 'events' | 'history' | 'knowledge' | 'knowledgeQa' | 'sourceHealth' | 'systemLogs' | 'profile' | 'runs' | 'scheduler' | 'modelStats' | 'pushConfig' | 'models' | 'users'
 type NavGroup = 'core' | 'ops'
 
 
@@ -1636,6 +1635,7 @@ const navItems: Array<{ key: NavKey; label: string; desc: string; icon: Componen
 
 
   { key: 'models', label: '模型配置', desc: '配置模型、获取模型列表、测试连通性和优先级', icon: Settings, group: 'ops' },
+  { key: 'users', label: '用户管理', desc: '管理普通用户账号状态并重置密码', icon: ShieldCheck, group: 'ops' },
 
 
 ]
@@ -1650,6 +1650,8 @@ const activePage = ref<NavKey>((getStoredDefaultPage() as NavKey) || 'dashboard'
 const authChecked = ref(false)
 const isAuthenticated = ref(false)
 const currentUser = ref<UserProfile | null>(null)
+const isAdmin = computed(() => hasAdminAccess(currentUser.value))
+const visibleNavItems = computed(() => isAdmin.value ? navItems : navItems.filter(item => ['dashboard', 'events', 'history', 'feedbackRecords', 'profile'].includes(item.key)))
 
 
 const collapsed = ref(false)
@@ -1828,7 +1830,7 @@ const currentNav = computed(() => {
   if (activePage.value === 'setup') {
     return { key: 'setup', label: '首次配置', desc: '完成账号、模型、数据源、早报和知识库的首轮配置', icon: ShieldCheck, group: 'ops' } as const
   }
-  return navItems.find((item) => item.key === activePage.value) || navItems[0]
+  return visibleNavItems.value.find((item) => item.key === activePage.value) || visibleNavItems.value[0]
 })
 
 
@@ -2203,6 +2205,10 @@ function defaultProvider(): AIModelProvider {
 
 
 async function switchPage(page: NavKey) {
+  if (!isAdmin.value && !['dashboard', 'events', 'history', 'feedbackRecords', 'profile'].includes(page)) {
+    activePage.value = 'dashboard'
+    return
+  }
   const openedFromMobileMenu = mobileMenuOpen.value
   if (page === 'setup') {
     setupLastOpened.value = new Date().toISOString()
@@ -2264,6 +2270,7 @@ const knowledgeQaPageRef = ref<any>(null)
 const dataBoardPageRef = ref<any>(null)
 const feedbackRecordsPageRef = ref<any>(null)
 const systemLogPageRef = ref<any>(null)
+const usersPageRef = ref<any>(null)
 
 
 
@@ -2275,6 +2282,7 @@ async function initializeApp() {
   try {
     if (getStoredAdminToken()) {
       currentUser.value = await getCurrentUser()
+      if (!visibleNavItems.value.some(item => item.key === activePage.value)) activePage.value = 'dashboard'
       isAuthenticated.value = true
       authChecked.value = true
       await loadDashboard()
@@ -2295,6 +2303,7 @@ async function initializeApp() {
 
 
 async function handleLoginSuccess(result: AuthLoginResult) {
+  clearAccountData()
   currentUser.value = result.profile
   isAuthenticated.value = true
   authChecked.value = true
@@ -2305,7 +2314,26 @@ async function handleLoginSuccess(result: AuthLoginResult) {
 }
 
 
+function clearAccountData() {
+  todayBriefing.value = null
+  selectedBriefing.value = null
+  events.value = []
+  history.value = []
+  runs.value = []
+  ingestRuns.value = []
+  providers.value = []
+  editingProvider.value = null
+  sourceHealth.value = null
+  systemStatus.value = null
+  knowledgeHealth.value = null
+  platformHotspots.value = null
+  modelStats.value = null
+  pushForm.value = defaultPush()
+  schedulerForm.value = defaultScheduler()
+}
+
 function handleLogout() {
+  clearAccountData()
   clearStoredAdminToken()
   isAuthenticated.value = false
   currentUser.value = null
@@ -2319,6 +2347,7 @@ function handleLogout() {
 
 
 function handleAuthExpired(event: Event) {
+  clearAccountData()
   const detail = (event as CustomEvent<{ message?: string }>).detail
   clearStoredAdminToken()
   currentUser.value = null
@@ -2343,8 +2372,9 @@ async function refreshProfile() {
 
 
 async function refreshCurrentPage() {
-
-
+  if (!visibleNavItems.value.some(item => item.key === activePage.value) && !(isAdmin.value && activePage.value === 'setup')) {
+    activePage.value = 'dashboard'
+  }
   if (activePage.value === 'dashboard' || activePage.value === 'setup') return loadDashboard()
 
 
@@ -2380,6 +2410,7 @@ async function refreshCurrentPage() {
 
 
   if (activePage.value === 'models') return loadModelsPage()
+  if (activePage.value === 'users') return usersPageRef.value?.refresh()
 
 
 }
@@ -2425,6 +2456,12 @@ async function loadDashboard() {
 
 
   await runTask(async () => {
+    if (!isAdmin.value) {
+      const [briefing, eventRows] = await Promise.all([getTodayBriefing(), listEvents({ limit: 50 })])
+      todayBriefing.value = briefing
+      events.value = eventRows
+      return
+    }
 
 
     const [status, briefing, health, runRows, eventRows, kHealth, providerRows] = await Promise.allSettled([

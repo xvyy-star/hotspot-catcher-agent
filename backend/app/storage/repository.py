@@ -446,7 +446,7 @@ def _event_matches_current_lane(row: HotspotEvent) -> bool:
     return category in preferred_categories and any(keyword.lower() in scoped_text for keyword in tech_keywords)
 
 
-def list_events(db: Session, limit: int = 100, category: str | None = None, risk_level: str | None = None) -> list[HotspotEvent]:
+def list_events(db: Session, limit: int = 100, category: str | None = None, risk_level: str | None = None, *, created_by: str | None = None) -> list[HotspotEvent]:
     stmt = (
         select(HotspotEvent)
         .where(HotspotEvent.is_fallback_sample.is_(False))
@@ -458,7 +458,7 @@ def list_events(db: Session, limit: int = 100, category: str | None = None, risk
     if risk_level:
         stmt = stmt.where(HotspotEvent.risk_level == risk_level)
     rows = list(db.execute(stmt).scalars())
-    blocked_keys = blocked_event_keys(db)
+    blocked_keys = blocked_event_keys(db, created_by=created_by)
     filtered: list[HotspotEvent] = []
     for row in rows:
         if row.event_key in blocked_keys:

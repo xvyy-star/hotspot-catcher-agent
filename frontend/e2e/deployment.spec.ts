@@ -67,11 +67,11 @@ test('真实部署入口完成登录、数据看板与退出闭环', async ({ pa
 
   const entryResponse = await page.goto('/')
   expect(entryResponse?.ok(), '真实部署首页应返回 2xx').toBe(true)
-  await expect(page.getByRole('heading', { name: '管理员身份认证' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '账号登录' })).toBeVisible()
 
-  await page.getByLabel('管理员账号').fill(adminUsername)
-  await page.getByLabel('管理员密码').fill(adminPassword)
-  await page.getByRole('button', { name: '进入情报中枢', exact: true }).click()
+  await page.getByLabel('账号', { exact: true }).fill(adminUsername)
+  await page.getByLabel('安全密码', { exact: true }).fill(adminPassword)
+  await page.getByRole('button', { name: '进入工作台', exact: true }).click()
 
   await expect(page.getByRole('heading', { name: '今日情报', level: 1 })).toBeVisible()
   await expect(page.locator('.global-loading')).toHaveCount(0)
@@ -90,7 +90,7 @@ test('真实部署入口完成登录、数据看板与退出闭环', async ({ pa
   await expect(page.getByRole('heading', { name: '个人中心', level: 1 })).toBeVisible()
   await page.getByRole('button', { name: '退出登录', exact: true }).click()
 
-  await expect(page.getByRole('heading', { name: '管理员登录' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '账号登录' })).toBeVisible()
   await expect.poll(() => storedToken(page), { message: '退出后应清除本地会话凭据' }).toBeNull()
   await expectSuccessfulApi(apiStatuses, 'POST', '/api/auth/logout')
 })

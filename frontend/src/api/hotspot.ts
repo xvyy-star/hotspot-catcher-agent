@@ -21,6 +21,8 @@ import type {
   SystemLogItem,
   SystemMetrics,
   UserProfile,
+  UserListResult,
+  ManagedUser,
 } from '@/types/hotspot'
 
 const apiBaseURL = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -86,14 +88,21 @@ api.interceptors.request.use((config) => {
 })
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const requestToken = String(response.config.headers?.['X-Admin-Token'] || '')
+    if (requestToken && requestToken !== getStoredAdminToken()) {
+      return Promise.reject(new Error('账号已切换，已丢弃旧会话响应。'))
+    }
+    return response
+  },
   (error) => {
     if (!error.response) {
       error.message = '后端服务未连接，请确认 FastAPI 已启动，或检查 VITE_API_BASE_URL / Vite proxy 配置。'
     } else if (error.response.status === 401) {
       error.message = error.response.data?.detail || '请重新登录或检查管理员凭据。'
       const requestUrl = String(error.config?.url || '')
-      if (getStoredAdminToken() && !requestUrl.includes('/auth/login')) {
+      const requestToken = String(error.config?.headers?.['X-Admin-Token'] || '')
+      if (requestToken && requestToken === getStoredAdminToken() && !requestUrl.includes('/auth/login')) {
         clearStoredAdminToken()
         if (!authExpiryNotified && typeof window !== 'undefined') {
           authExpiryNotified = true
@@ -126,6 +135,39 @@ export async function loginAdmin(payload: {
 export async function getCurrentUser(): Promise<UserProfile> {
   const res = await api.get('/auth/me')
   return res.data.data
+}
+
+export function hasAdminAccess(profile: UserProfile | null): boolean {
+  return Boolean(profile && profile.is_admin !== false && ['owner', 'admin'].includes(profile.role.toLowerCase()))
+}
+
+export async function getRegistrationOptions(): Promise<{ registration_enabled: boolean }> {
+  const res = await api.get('/auth/options')
+  return res.data.data
+}
+
+export async function registerUser(payload: {
+  username: string
+  display_name: string
+  password: string
+  confirm_password: string
+}): Promise<{ ok: boolean; message: string }> {
+  const res = await api.post('/auth/register', payload)
+  return res.data
+}
+
+export async function listUsers(params: { keyword?: string; page?: number; page_size?: number }): Promise<UserListResult> {
+  const res = await api.get('/auth/users', { params })
+  return res.data.data
+}
+
+export async function updateUser(id: number, payload: { is_active: boolean }): Promise<ManagedUser> {
+  const res = await api.patch(`/auth/users/${id}`, payload)
+  return res.data.data
+}
+
+export async function resetUserPassword(id: number, payload: { new_password: string; confirm_password: string }): Promise<void> {
+  await api.post(`/auth/users/${id}/reset-password`, payload)
 }
 
 export async function logoutAdmin() {

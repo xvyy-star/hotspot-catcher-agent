@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.agent.runner import CONNECTOR_REGISTRY, load_sources_config, run_daily_briefing
 from app.core.config import settings
+from app.core.security import get_current_principal, is_admin
+from app.services.member_view_service import member_briefing, member_event
 from app.db.models import HotspotEvent, HotspotRawItem
 from app.db.session import SessionLocal, get_db
 from app.pipeline.evidence import FAKE_SOURCE_CODES, is_http_url, split_items_by_evidence
@@ -254,9 +256,9 @@ def event_to_dict(db: Session, row: HotspotEvent) -> dict[str, Any]:
     return data
 
 
-def _attach_feedback(db: Session, event_payloads: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _attach_feedback(db: Session, event_payloads: list[dict[str, Any]], *, created_by: str) -> list[dict[str, Any]]:
     """给事件响应补充人工反馈摘要，并默认隐藏已屏蔽事件。"""
-    summary_map = get_feedback_summary_map(db, [str(item.get("event_key") or "") for item in event_payloads])
+    summary_map = get_feedback_summary_map(db, [str(item.get("event_key") or "") for item in event_payloads], created_by=created_by)
     result: list[dict[str, Any]] = []
     for item in event_payloads:
         feedback = summary_map.get(str(item.get("event_key") or ""), {})
@@ -276,13 +278,13 @@ def _attach_feedback(db: Session, event_payloads: list[dict[str, Any]]) -> list[
     )
 
 
-def _attach_feedback_to_briefing_payload(db: Session, data: dict[str, Any] | None) -> dict[str, Any] | None:
+def _attach_feedback_to_briefing_payload(db: Session, data: dict[str, Any] | None, *, created_by: str) -> dict[str, Any] | None:
     if not data or not isinstance(data.get("raw_json"), dict):
         return data
     raw_json = dict(data["raw_json"])
     events = raw_json.get("events")
     if isinstance(events, list):
-        raw_json["events"] = _attach_feedback(db, [dict(event) for event in events if isinstance(event, dict)])
+        raw_json["events"] = _attach_feedback(db, [dict(event) for event in events if isinstance(event, dict)], created_by=created_by)
     data["raw_json"] = raw_json
     return data
 
@@ -545,23 +547,36 @@ def test_push_config(payload: PushConfigPayload | None = None):
 
 
 @router.get("/briefings/today")
-def today_briefing(db: Session = Depends(get_db)):
+def today_briefing(request: Request, db: Session = Depends(get_db)):
     """查询今日早报。若今天还没生成，前端会引导用户点击生成。"""
     briefing = get_today_briefing(db)
-    return {"data": _attach_feedback_to_briefing_payload(db, orm_to_dict(briefing)) if briefing else None}
+    principal = get_current_principal(request)
+    data = orm_to_dict(briefing) if briefing else None
+    if data and not is_admin(principal):
+        data = member_briefing(data)
+    return {"data": _attach_feedback_to_briefing_payload(db, data, created_by=principal["username"])}
 
 
 @router.get("/briefings")
-def briefings(limit: int = Query(30, ge=1, le=100), db: Session = Depends(get_db)):
+def briefings(request: Request, limit: int = Query(30, ge=1, le=100), db: Session = Depends(get_db)):
     # 列表页只返回轻量摘要字段；完整 markdown/raw_json 走详情接口按需加载。
-    return {"data": list_briefing_summaries(db, limit=limit)}
+    rows = list_briefing_summaries(db, limit=limit)
+    if not is_admin(get_current_principal(request)):
+        for row in rows:
+            row["title"] = f"技术情报简报 {row['briefing_date']}"
+            row["summary"] = ""
+    return {"data": rows}
 
 
 @router.get("/briefings/{briefing_date}")
-def briefing_by_date(briefing_date: date, db: Session = Depends(get_db)):
+def briefing_by_date(briefing_date: date, request: Request, db: Session = Depends(get_db)):
     """按日期查询历史早报。"""
     briefing = get_briefing_by_date(db, briefing_date)
-    return {"data": _attach_feedback_to_briefing_payload(db, orm_to_dict(briefing)) if briefing else None}
+    principal = get_current_principal(request)
+    data = orm_to_dict(briefing) if briefing else None
+    if data and not is_admin(principal):
+        data = member_briefing(data)
+    return {"data": _attach_feedback_to_briefing_payload(db, data, created_by=principal["username"])}
 
 
 @router.post("/briefings/{briefing_date}/regenerate", deprecated=True)
@@ -628,17 +643,23 @@ def source_health(
 
 @router.get("/events")
 def events(
+    request: Request,
     limit: int = Query(100, ge=1, le=500),
     category: str | None = None,
     risk_level: str | None = None,
     db: Session = Depends(get_db),
 ):
-    rows = list_events(db, limit=limit, category=category, risk_level=risk_level)
-    return {"data": _attach_feedback(db, [event_to_dict(db, row) for row in rows])}
+    username = get_current_principal(request)["username"]
+    rows = list_events(db, limit=limit, category=category, risk_level=risk_level, created_by=username)
+    payloads = [event_to_dict(db, row) for row in rows]
+    if not is_admin(get_current_principal(request)):
+        payloads = [view for item in payloads for view in [member_event(item)] if view is not None]
+    return {"data": _attach_feedback(db, payloads, created_by=username)}
 
 
 @router.get("/feedback")
 def feedback_records(
+    request: Request,
     action: str | None = Query(None, description="USEFUL / IRRELEVANT / FAVORITE / BLOCK"),
     keyword: str | None = Query(None, description="按 event_key、标题或备注搜索"),
     category: str | None = Query(None, max_length=50, description="按情报分类精确筛选"),
@@ -659,20 +680,21 @@ def feedback_records(
             category=category,
             risk_level=risk_level,
             limit=limit,
+            created_by=get_current_principal(request)["username"],
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"data": {"items": items, "summary": get_feedback_overview(db)}}
+    return {"data": {"items": items, "summary": get_feedback_overview(db, created_by=get_current_principal(request)["username"])}}
 
 
 @router.get("/events/{event_key}/feedback")
-def event_feedback(event_key: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+def event_feedback(event_key: str, request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
     """查看某条情报的人工反馈明细。"""
-    return {"data": list_event_feedback(db, event_key=event_key)}
+    return {"data": list_event_feedback(db, event_key=event_key, created_by=get_current_principal(request)["username"])}
 
 
 @router.post("/events/{event_key}/feedback")
-def create_event_feedback(event_key: str, payload: EventFeedbackPayload, db: Session = Depends(get_db)) -> dict[str, Any]:
+def create_event_feedback(event_key: str, payload: EventFeedbackPayload, request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
     """给情报打反馈：有用、无关、收藏、屏蔽。
 
     产品意义：运营反馈会影响前端展示排序；屏蔽后该情报默认不再展示。
@@ -683,7 +705,7 @@ def create_event_feedback(event_key: str, payload: EventFeedbackPayload, db: Ses
             event_key=event_key,
             action=payload.action,
             note=payload.note,
-            created_by=settings.admin_username,
+            created_by=get_current_principal(request)["username"],
         )
     except FeedbackEventNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -700,17 +722,17 @@ def create_event_feedback(event_key: str, payload: EventFeedbackPayload, db: Ses
     return {
         "ok": True,
         "data": {
-            "feedback": list_event_feedback(db, event_key=event_key),
-            "summary": get_feedback_summary_map(db, [event_key]).get(event_key, {}),
+            "feedback": list_event_feedback(db, event_key=event_key, created_by=get_current_principal(request)["username"]),
+            "summary": get_feedback_summary_map(db, [event_key], created_by=get_current_principal(request)["username"]).get(event_key, {}),
         },
     }
 
 
 @router.delete("/events/{event_key}/feedback/{action}")
-def remove_event_feedback(event_key: str, action: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+def remove_event_feedback(event_key: str, action: str, request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
     """撤销某类人工反馈。"""
     try:
-        deleted = delete_event_feedback(db, event_key=event_key, action=action, created_by=settings.admin_username)
+        deleted = delete_event_feedback(db, event_key=event_key, action=action, created_by=get_current_principal(request)["username"])
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     write_system_log(
@@ -725,8 +747,8 @@ def remove_event_feedback(event_key: str, action: str, db: Session = Depends(get
         "ok": True,
         "data": {
             "deleted_count": deleted,
-            "feedback": list_event_feedback(db, event_key=event_key),
-            "summary": get_feedback_summary_map(db, [event_key]).get(event_key, {}),
+            "feedback": list_event_feedback(db, event_key=event_key, created_by=get_current_principal(request)["username"]),
+            "summary": get_feedback_summary_map(db, [event_key], created_by=get_current_principal(request)["username"]).get(event_key, {}),
         },
     }
 

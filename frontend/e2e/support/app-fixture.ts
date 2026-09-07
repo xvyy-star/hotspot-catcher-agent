@@ -106,6 +106,7 @@ async function installApiMock(page: Page, state: MockApiState) {
       body,
     })
 
+    if (method === 'GET' && path === '/auth/options') return json(route, { data: { registration_enabled: true } })
     if (method === 'POST' && path === '/auth/login') {
       state.loginAttempts.push(body || {})
       if (body?.password !== 'correct-password') {

@@ -24,6 +24,7 @@ from app.db.session import SessionLocal, engine, init_db
 from app.services.model_provider_service import ensure_default_providers
 from app.services.scheduler_service import configure_scheduler, run_scheduled_job
 from app.services.system_log_service import write_system_log
+from app.services.user_service import bootstrap_admin
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s [%(name)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -48,6 +49,7 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     _validate_startup_config()
     init_db()
     with SessionLocal() as db:
+        bootstrap_admin(db)
         ensure_default_providers(db)
         write_system_log(
             db,

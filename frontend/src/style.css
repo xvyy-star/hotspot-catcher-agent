@@ -373,11 +373,14 @@ button {
   border-top: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
 }
 
 .sidebar-toggle-row .theme-toggle-btn {
-  flex: 1;
+  width: 36px;
+  height: 36px;
+  flex: none;
   justify-content: center;
 }
 

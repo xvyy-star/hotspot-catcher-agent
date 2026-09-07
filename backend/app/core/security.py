@@ -4,11 +4,13 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import re
 
 import bcrypt
-from fastapi import Request, Response
+from fastapi import HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 
@@ -34,32 +36,74 @@ def extract_admin_token(request: Request) -> str:
     return ""
 
 
-def valid_admin_token(token: str) -> bool:
-    """校验管理员令牌。
-
-    P0-1: 优先校验 Redis 会话 token；如果不是会话 token，再校验静态 ADMIN_TOKEN（服务间调用）。
-    """
+def resolve_token_principal(token: str) -> dict | None:
+    """Validate session state against its persistent identity on every request."""
     if not token:
-        return False
-
-    # 1. 优先检查是否是有效的会话 token（登录签发，可吊销）
+        return None
+    expected = settings.admin_token or ""
+    if expected and hmac.compare_digest(token.encode("utf-8"), expected.encode("utf-8")):
+        return _service_principal("service_token")
     try:
         from app.services.session_service import get_session
+        from app.services.user_service import user_principal
+        from app.db.models import AppUser
+        from app.db.session import SessionLocal
 
         session = get_session(token)
-        if session is not None:
-            return True
+        if session is None or "user_id" not in session or "auth_version" not in session:
+            return None
+        with SessionLocal() as db:
+            user = db.get(AppUser, int(session["user_id"]))
+            if user is None or not user.is_active or user.auth_version != int(session["auth_version"]):
+                return None
+            return user_principal(user)
     except Exception:  # noqa: BLE001
-        # 不静默吞掉：Redis 不可用意味着会话吊销失效，必须告警。
-        # 会话 token 无法校验时会落到静态 ADMIN_TOKEN 校验（会话 token 不会匹配），
-        # 即对已登录会话表现为 fail-closed（返回 401），不会误放行。
-        logger.warning("Redis 会话查询失败，无法校验会话 token，降级到静态 ADMIN_TOKEN 校验", exc_info=True)
+        logger.warning("Session identity verification failed", exc_info=True)
+        return None
 
-    # 2. 兜底：校验静态 ADMIN_TOKEN（用于服务间 API 调用，不通过 login 接口获取）
-    expected = settings.admin_token or ""
-    if not expected:
-        return False
-    return hmac.compare_digest(token or "", expected)
+
+def _service_principal(auth_mode: str) -> dict:
+    return {
+        "id": None, "username": settings.admin_username.strip().lower(),
+        "display_name": settings.admin_display_name or settings.admin_username,
+        "role": "owner", "is_active": True, "auth_mode": auth_mode,
+    }
+
+
+def is_admin(principal: dict) -> bool:
+    return principal.get("role") in {"owner", "admin"}
+
+
+def get_current_principal(request: Request) -> dict:
+    principal = getattr(request.state, "principal", None)
+    if principal is None:
+        raise HTTPException(status_code=401, detail="请先登录。")
+    return principal
+
+
+def valid_admin_token(token: str) -> bool:
+    principal = resolve_token_principal(token)
+    return principal is not None and is_admin(principal)
+
+
+def _member_route_allowed(path: str, method: str) -> bool:
+    self_routes = {
+        ("GET", "/auth/me"), ("POST", "/auth/logout"),
+        ("POST", "/auth/change-password"), ("PUT", "/auth/profile"),
+        ("POST", "/auth/reset-failures"),
+    }
+    if (method, path) in self_routes:
+        return True
+    if method == "GET" and path in {
+        "/hotspots/events", "/hotspots/feedback", "/hotspots/briefings",
+        "/hotspots/briefings/today",
+    }:
+        return True
+    if method == "GET" and re.fullmatch(r"/hotspots/briefings/\d{4}-\d{2}-\d{2}", path):
+        return True
+    if method in {"GET", "POST"} and re.fullmatch(r"/hotspots/events/[^/]+/feedback", path):
+        return True
+    return method == "DELETE" and re.fullmatch(r"/hotspots/events/[^/]+/feedback/[^/]+", path) is not None
 
 
 def valid_admin_password(password: str) -> bool:
@@ -127,24 +171,30 @@ class AdminAuthAndRateLimitMiddleware(BaseHTTPMiddleware):
         self.api_prefix = api_prefix.rstrip("/") or "/api"
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        path = request.url.path
-        if not path.startswith(self.api_prefix) or request.method.upper() == "OPTIONS":
+        path = request.url.path.rstrip("/") or "/"
+        if not (path == self.api_prefix or path.startswith(self.api_prefix + "/")) or request.method.upper() == "OPTIONS":
             return await call_next(request)
         auth_exempt = path in settings.auth_exempt_paths
 
         if settings.api_auth_enabled and not auth_exempt:
             token = extract_admin_token(request)
-            if not valid_admin_token(token):
+            principal = await run_in_threadpool(resolve_token_principal, token)
+            if principal is None:
                 return JSONResponse(
                     status_code=401,
                     content={
-                        "detail": "需要管理员令牌。请先登录获取会话凭据，或在请求头中设置 Authorization: Bearer <token>。",
+                        "detail": "请先登录，或在请求头中设置有效的会话凭据。",
                         "code": "ADMIN_TOKEN_REQUIRED",
                     },
                 )
+            request.state.principal = principal
+            if not is_admin(principal) and not _member_route_allowed(path[len(self.api_prefix):], request.method.upper()):
+                return JSONResponse(status_code=403, content={"detail": "此操作仅限管理员。", "code": "ADMIN_REQUIRED"})
+        elif not settings.api_auth_enabled:
+            request.state.principal = _service_principal("development")
 
         if settings.rate_limit_enabled:
-            rate_response = self._check_rate_limit(request)
+            rate_response = await run_in_threadpool(self._check_rate_limit, request)
             if rate_response is not None:
                 return rate_response
 
@@ -165,6 +215,10 @@ class AdminAuthAndRateLimitMiddleware(BaseHTTPMiddleware):
 
         is_write = request.method.upper() in {"POST", "PUT", "PATCH", "DELETE"}
         token = extract_admin_token(request) or "anonymous"
+        if request.url.path.rstrip("/") in {
+            settings.api_prefix + "/auth/login", settings.api_prefix + "/auth/register",
+        }:
+            token = "public-auth"
         client_host = AdminAuthAndRateLimitMiddleware._client_ip(request)
 
         try:

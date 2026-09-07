@@ -1,5 +1,76 @@
 import { E2E_SESSION_TOKEN, expect, openAuthenticated, test } from './support/app-fixture'
 
+for (const width of [1440, 375]) {
+  test(`Registration preserves login layout and completes ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    let registration: any
+    await page.route('**/api/auth/register', async route => {
+      registration = route.request().postDataJSON()
+      await route.fulfill({ status: 201, json: { ok: true, message: '注册成功，请登录。' } })
+    })
+    await page.goto('/')
+    await expect(page.locator('.split-login-page')).toBeVisible()
+    await page.getByRole('tab', { name: '新席位注册' }).click()
+    await page.getByLabel('注册账号', { exact: true }).fill('reader_demo')
+    await page.getByLabel('用户昵称', { exact: true }).fill('测试读者')
+    await page.getByLabel('设置密码', { exact: true }).fill('reader-password')
+    await page.getByLabel('确认密码', { exact: true }).fill('reader-password')
+    await page.screenshot({ path: `../output/playwright/registration-${width}.png`, fullPage: true })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    await page.getByRole('button', { name: '注册账号', exact: true }).click()
+    await expect(page.getByRole('heading', { name: '账号登录' })).toBeVisible()
+    await expect(page.getByRole('alert')).toContainText('创建成功')
+    expect(registration).toMatchObject({ username: 'reader_demo', password: 'reader-password' })
+    expect(await page.evaluate(() => localStorage.getItem('HOTSPOT_ADMIN_TOKEN'))).toBeNull()
+  })
+}
+
+test('Member navigation excludes management and handles stale default page', async ({ page, apiState }) => {
+  await page.addInitScript(() => localStorage.setItem('hotspot_default_page', 'models'))
+  await page.route('**/api/auth/me', route => route.fulfill({ json: { data: {
+    username: 'reader', display_name: '测试读者', role: 'user', is_admin: false,
+    avatar_text: '读者', permissions: ['events:read', 'feedback:write'], auth_mode: 'password', api_auth_enabled: true,
+  } } }))
+  await openAuthenticated(page)
+  for (const name of ['用户管理', '模型配置', '专题知识库', '数据看板', '生成今日早报', '写入知识库']) {
+    await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0)
+  }
+  await expect(page.locator('.setup-nudge')).toHaveCount(0)
+  expect(apiState.requests.filter(request => /^\/(models|knowledge|system)\//.test(request.path))).toEqual([])
+  await page.getByRole('button', { name: '个人中心', exact: true }).click()
+  await expect(page.locator('.role-badge')).toHaveText('普通用户')
+  await expect(page.getByRole('button', { name: '开发者凭据' })).toHaveCount(0)
+})
+
+test('Administrator searches users, toggles status and resets password', async ({ page }) => {
+  const user = { id: 2, username: 'reader_demo', display_name: '测试读者', role: 'user', is_active: true, created_at: '2026-09-07T08:00:00' }
+  let resetPayload: any
+  await page.route('**/api/auth/users**', async route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { data: { items: [user], total: 1, page: 1, page_size: 20 } } })
+    if (route.request().method() === 'PATCH') {
+      user.is_active = route.request().postDataJSON().is_active
+      return route.fulfill({ json: { data: user } })
+    }
+    resetPayload = route.request().postDataJSON()
+    return route.fulfill({ json: { ok: true } })
+  })
+  await openAuthenticated(page)
+  await page.getByRole('button', { name: '用户管理', exact: true }).click()
+  await page.getByLabel('搜索账号或昵称').fill('reader')
+  await page.getByRole('button', { name: '搜索', exact: true }).click()
+  const row = page.getByRole('row').filter({ hasText: 'reader_demo' })
+  await row.getByRole('button', { name: '停用', exact: true }).click()
+  await expect(row.getByRole('button', { name: '启用', exact: true })).toBeVisible()
+  await row.getByRole('button', { name: '重置密码', exact: true }).click()
+  const form = page.locator('form').filter({ has: page.getByLabel('确认密码', { exact: true }) })
+  await form.getByLabel('新密码', { exact: true }).fill('reset-password')
+  await form.getByLabel('确认密码', { exact: true }).fill('reset-password')
+  await form.getByRole('button', { name: '保存', exact: true }).click()
+  await expect(form).toHaveCount(0)
+  expect(resetPayload).toEqual({ new_password: 'reset-password', confirm_password: 'reset-password' })
+  await page.screenshot({ path: '../output/playwright/users-management.png', fullPage: true })
+})
+
 test('Source cutover removes old QA cache without clearing credentials', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('HOTSPOT_KNOWLEDGE_QA_CHAT_V1', 'legacy answer')
@@ -47,11 +118,12 @@ for (const width of [1440, 768, 375, 320]) {
 
 test('管理员登录成功后进入工作台并携带会话凭据', async ({ page, apiState }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: '管理员身份认证' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '账号登录' })).toBeVisible()
 
-  await page.getByLabel('管理员密码').fill('correct-password')
-  await page.getByLabel('保持当前浏览器登录状态 (30天)').check()
-  await page.getByRole('button', { name: '进入情报中枢', exact: true }).click()
+  await page.getByLabel('账号', { exact: true }).fill('admin')
+  await page.getByLabel('安全密码', { exact: true }).fill('correct-password')
+  await page.getByLabel('保持 30 天免登录').check()
+  await page.getByRole('button', { name: '进入工作台', exact: true }).click()
 
   await expect(page.getByRole('heading', { name: '今日情报', level: 1 })).toBeVisible()
   await expect(page.locator('.global-loading')).toHaveCount(0)

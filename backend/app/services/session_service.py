@@ -37,7 +37,10 @@ def get_redis() -> redis.Redis:
 # ---------------------------------------------------------------------------
 
 _SESSION_PREFIX = "hotspot:session:"
-def create_session(*, username: str, ip: str, remember: bool = False) -> tuple[str, int]:
+def create_session(
+    *, username: str, ip: str, remember: bool = False,
+    user_id: int | None = None, auth_version: int | None = None,
+) -> tuple[str, int]:
     """签发一个新的会话 token，写入 Redis，返回 (token, ttl_seconds)。"""
     token = secrets.token_urlsafe(48)
     configured_ttl = settings.session_remember_ttl_seconds if remember else settings.session_ttl_seconds
@@ -48,9 +51,13 @@ def create_session(*, username: str, ip: str, remember: bool = False) -> tuple[s
         "created_at": datetime.utcnow().isoformat(),
         "remember": "1" if remember else "0",
     }
+    if user_id is not None and auth_version is not None:
+        payload.update(user_id=str(user_id), auth_version=str(auth_version))
     client = get_redis()
-    client.hset(_SESSION_PREFIX + token, mapping=payload)
-    client.expire(_SESSION_PREFIX + token, ttl)
+    with client.pipeline(transaction=True) as pipe:
+        pipe.hset(_SESSION_PREFIX + token, mapping=payload)
+        pipe.expire(_SESSION_PREFIX + token, ttl)
+        pipe.execute()
     return token, ttl
 
 

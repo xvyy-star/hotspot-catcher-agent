@@ -3,16 +3,16 @@
     type="button"
     class="theme-toggle-btn"
     :class="[variant, { collapsed }]"
-    :title="theme === 'dark' ? '切换为浅色极光主题' : '切换为深邃黑曜石主题'"
-    :aria-label="theme === 'dark' ? '切换为浅色极光主题' : '切换为深邃黑曜石主题'"
+    :title="theme === 'dark' ? '切换为浅色主题' : '切换为黑色主题'"
+    :aria-label="theme === 'dark' ? '切换为浅色主题' : '切换为黑色主题'"
     @click="toggleTheme"
   >
     <div class="icon-wrapper">
       <Sun v-if="theme === 'dark'" class="theme-icon sun" />
       <Moon v-else class="theme-icon moon" />
     </div>
-    <span v-if="!collapsed" class="theme-label">
-      {{ theme === 'dark' ? '浅色极光' : '深邃黑曜' }}
+    <span v-if="!collapsed && variant !== 'sidebar'" class="theme-label">
+      {{ theme === 'dark' ? '浅色' : '黑色' }}
     </span>
   </button>
 </template>
@@ -84,22 +84,28 @@ onMounted(() => {
 
 /* Sidebar variant */
 .theme-toggle-btn.sidebar {
-  padding: 6px 10px;
-  background: var(--surface-subtle, rgba(255, 255, 255, 0.04));
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-  color: var(--color-text);
-  height: 34px;
+  padding: 0;
+  width: 36px;
+  height: 36px;
+  background: var(--color-hover-bg);
+  border: 1px solid var(--border-subtle);
+  color: var(--color-muted);
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .theme-toggle-btn.sidebar:hover {
-  background: var(--color-hover-bg);
-  border-color: var(--border-glow, rgba(0, 242, 254, 0.3));
+  background: var(--color-active-bg);
+  border-color: var(--border-glow);
   color: var(--color-primary);
 }
 
 .theme-toggle-btn.sidebar.collapsed {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   justify-content: center;
 }
@@ -107,23 +113,40 @@ onMounted(() => {
 /* Floating variant for Login */
 .theme-toggle-btn.floating {
   position: fixed;
-  left: 24px;
-  bottom: 24px;
+  right: 28px;
+  top: 28px;
+  left: auto;
+  bottom: auto;
   z-index: 999;
-  padding: 8px 16px;
+  padding: 7px 16px;
   border-radius: 9999px;
-  background: var(--surface-card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--border-glow);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-  color: var(--color-text);
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.03) !important;
+  color: #18181b !important;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.theme-toggle-btn.floating .theme-label {
+  color: #18181b !important;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .theme-toggle-btn.floating:hover {
-  transform: translateY(-2px);
-  border-color: var(--color-primary);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3), 0 0 15px var(--glow-accent);
+  transform: translateY(-1.5px);
+  background: #ffffff !important;
+  border-color: rgba(0, 0, 0, 0.16) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04) !important;
+  color: #18181b !important;
+}
+
+.theme-toggle-btn.floating:active {
+  transform: translateY(0);
 }
 
 .theme-label {

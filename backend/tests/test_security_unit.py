@@ -62,7 +62,8 @@ def test_trusted_proxy_uses_address_before_trusted_hop(monkeypatch) -> None:
 
 
 def test_session_ttl_uses_runtime_configuration(monkeypatch) -> None:
-    fake = FakeRedis()
+    from fakeredis import FakeRedis as RedisFixture
+    fake = RedisFixture(decode_responses=True)
     monkeypatch.setattr(session_service, "get_redis", lambda: fake)
     monkeypatch.setattr(
         session_service,
@@ -77,8 +78,8 @@ def test_session_ttl_uses_runtime_configuration(monkeypatch) -> None:
 
     assert ttl == 1234
     assert remember_ttl == 5678
-    assert fake.expirations[f"hotspot:session:{token}"] == 1234
-    assert fake.expirations[f"hotspot:session:{remember_token}"] == 5678
+    assert fake.ttl(f"hotspot:session:{token}") == 1234
+    assert fake.ttl(f"hotspot:session:{remember_token}") == 5678
 
 
 def test_briefing_generation_slot_prevents_duplicate_work(monkeypatch) -> None:

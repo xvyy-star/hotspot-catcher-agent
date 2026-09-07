@@ -108,12 +108,15 @@ def delete_event_feedback(
     return len(rows)
 
 
-def list_event_feedback(db: Session, *, event_key: str) -> list[dict[str, Any]]:
-    rows = db.execute(
+def list_event_feedback(db: Session, *, event_key: str, created_by: str | None = None) -> list[dict[str, Any]]:
+    stmt = (
         select(HotspotEventFeedback)
         .where(HotspotEventFeedback.event_key == str(event_key or "").strip())
         .order_by(desc(HotspotEventFeedback.updated_at), desc(HotspotEventFeedback.id))
-    ).scalars()
+    )
+    if created_by is not None:
+        stmt = stmt.where(HotspotEventFeedback.created_by == created_by)
+    rows = db.execute(stmt).scalars()
     return [feedback_to_dict(row) for row in rows]
 
 
@@ -125,6 +128,7 @@ def list_feedback_records(
     category: str | None = None,
     risk_level: str | None = None,
     limit: int = 200,
+    created_by: str | None = None,
 ) -> list[dict[str, Any]]:
     """列出全部人工反馈记录，并补充对应情报的标题和基础指标。
 
@@ -148,6 +152,8 @@ def list_feedback_records(
         .order_by(desc(HotspotEventFeedback.updated_at), desc(HotspotEventFeedback.id))
         .limit(limit)
     )
+    if created_by is not None:
+        stmt = stmt.where(HotspotEventFeedback.created_by == created_by)
     if normalized_action:
         stmt = stmt.where(HotspotEventFeedback.action == normalized_action)
     normalized_category = str(category or "").strip()
@@ -196,12 +202,12 @@ def list_feedback_records(
     return records
 
 
-def get_feedback_summary_map(db: Session, event_keys: list[str]) -> dict[str, dict[str, Any]]:
+def get_feedback_summary_map(db: Session, event_keys: list[str], *, created_by: str | None = None) -> dict[str, dict[str, Any]]:
     keys = [str(key).strip() for key in event_keys if str(key or "").strip()]
     if not keys:
         return {}
 
-    rows = db.execute(
+    stmt = (
         select(
             HotspotEventFeedback.event_key,
             HotspotEventFeedback.action,
@@ -209,7 +215,10 @@ def get_feedback_summary_map(db: Session, event_keys: list[str]) -> dict[str, di
         )
         .where(HotspotEventFeedback.event_key.in_(keys))
         .group_by(HotspotEventFeedback.event_key, HotspotEventFeedback.action)
-    ).all()
+    )
+    if created_by is not None:
+        stmt = stmt.where(HotspotEventFeedback.created_by == created_by)
+    rows = db.execute(stmt).all()
     summary: dict[str, dict[str, Any]] = {
         key: {
             "counts": {action: 0 for action in sorted(VALID_FEEDBACK_ACTIONS)},
@@ -250,21 +259,27 @@ def get_feedback_summary_map(db: Session, event_keys: list[str]) -> dict[str, di
     return summary
 
 
-def blocked_event_keys(db: Session) -> set[str]:
-    rows = db.execute(
+def blocked_event_keys(db: Session, *, created_by: str | None = None) -> set[str]:
+    stmt = (
         select(HotspotEventFeedback.event_key)
         .join(HotspotEvent, HotspotEvent.event_key == HotspotEventFeedback.event_key)
         .where(HotspotEventFeedback.action == BLOCK_ACTION)
-    ).scalars()
+    )
+    if created_by is not None:
+        stmt = stmt.where(HotspotEventFeedback.created_by == created_by)
+    rows = db.execute(stmt).scalars()
     return {str(row) for row in rows if str(row or "").strip()}
 
 
-def get_feedback_overview(db: Session) -> dict[str, Any]:
-    rows = db.execute(
+def get_feedback_overview(db: Session, *, created_by: str | None = None) -> dict[str, Any]:
+    stmt = (
         select(HotspotEventFeedback.action, func.count(HotspotEventFeedback.id))
         .join(HotspotEvent, HotspotEvent.event_key == HotspotEventFeedback.event_key)
         .group_by(HotspotEventFeedback.action)
-    ).all()
+    )
+    if created_by is not None:
+        stmt = stmt.where(HotspotEventFeedback.created_by == created_by)
+    rows = db.execute(stmt).all()
     counts = {action: 0 for action in sorted(VALID_FEEDBACK_ACTIONS)}
     for action, count in rows:
         counts[str(action).upper()] = int(count or 0)

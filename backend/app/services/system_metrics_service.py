@@ -20,6 +20,7 @@ from app.pipeline.evidence import FAKE_SOURCE_CODES, is_http_url
 from app.core.time import business_naive_to_utc, business_now_naive, utc_naive_to_business, utc_now_iso
 from app.services.llm_observability_service import get_llm_stats
 from app.services.feedback_service import blocked_event_keys, get_feedback_overview
+from app.core.config import settings
 from app.services.source_health_service import get_source_health_report
 from app.services.system_log_service import get_log_summary, list_system_logs
 from app.storage.repository import _event_matches_current_lane
@@ -206,7 +207,7 @@ def get_system_metrics(db: Session) -> dict[str, Any]:
             ).scalars()
         )
     recent_events = [row for row in _filter_events_with_real_evidence(db, recent_events) if _event_matches_current_lane(row)]
-    blocked_keys = blocked_event_keys(db)
+    blocked_keys = blocked_event_keys(db, created_by=settings.admin_username.strip().lower())
     if blocked_keys:
         recent_events = [row for row in recent_events if row.event_key not in blocked_keys]
     total_events = len(recent_events)

@@ -29,9 +29,11 @@ export interface PlatformHotspotFetchResult {
 }
 
 export interface UserProfile {
+  id?: number
   username: string
   display_name: string
   role: string
+  is_admin?: boolean
   avatar_text: string
   permissions: string[]
   auth_mode: string
@@ -58,6 +60,22 @@ export interface AuthLoginResult {
   profile: UserProfile
   login_at: string
   expires_in: number
+}
+
+export interface ManagedUser {
+  id: number
+  username: string
+  display_name: string
+  role: string
+  is_active: boolean
+  created_at?: string
+}
+
+export interface UserListResult {
+  items: ManagedUser[]
+  total: number
+  page: number
+  page_size: number
 }
 
 export type EventFeedbackAction = 'USEFUL' | 'IRRELEVANT' | 'FAVORITE' | 'BLOCK'
