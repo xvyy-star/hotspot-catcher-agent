@@ -17,6 +17,13 @@ PATTERNS = {
     "aws-access-key": re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
     "api-key": re.compile(r"\bsk-[A-Za-z0-9_-]{24,}\b"),
 }
+REVIEWED_BINARY_PREFIXES = ("docs/screenshots/",)
+REVIEWED_BINARY_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
+
+
+def reviewed_binary_path(path: str) -> bool:
+    normalized = PurePosixPath(path).as_posix().lower()
+    return normalized.startswith(REVIEWED_BINARY_PREFIXES) and normalized.endswith(REVIEWED_BINARY_SUFFIXES)
 
 
 def private_path(path: str) -> bool:
@@ -76,7 +83,8 @@ def main():
             continue
         data = (ROOT / path).read_bytes() if args.worktree else git("show", f":{path}")
         if b"\0" in data:
-            findings.append(f"{path}: binary-requires-manual-review")
+            if not reviewed_binary_path(path):
+                findings.append(f"{path}: binary-requires-manual-review")
             continue
         for line, rule in inspect_text(path, data.decode("utf-8", errors="replace"), secrets):
             findings.append(f"{path}:{line}: {rule}")

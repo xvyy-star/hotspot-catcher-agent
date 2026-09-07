@@ -23,6 +23,12 @@ def test_release_scan_reports_rules_not_values():
     assert release_check.inspect_text("source.py", "copied-local-credential", ["copied-local-credential"])
 
 
+def test_only_reviewed_documentation_images_skip_binary_finding():
+    assert release_check.reviewed_binary_path("docs/screenshots/dashboard.png")
+    assert not release_check.reviewed_binary_path("docs/screenshots/archive.zip")
+    assert not release_check.reviewed_binary_path("frontend/public/dashboard.png")
+
+
 def test_no_model_provider_is_created_without_configuration(monkeypatch):
     from app.services import model_provider_service as service
     from app.db.session import SessionLocal

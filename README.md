@@ -2,6 +2,32 @@
 
 面向 AI 与计算机技术领域的信息聚合与简报工具。通过公开 API 收集模型、研究论文、技术项目和开发者社区动态，完成去重、热度评分、知识库检索与结构化简报生成，并支持通过 OneBot v11 推送至 QQ。
 
+## 界面预览
+
+### 登录与注册
+
+![登录与注册](docs/screenshots/login.png)
+
+### 今日情报
+
+![今日情报](docs/screenshots/today-intelligence.png)
+
+### 热点池
+
+![热点池](docs/screenshots/hotspot-pool.png)
+
+### 简报归档
+
+![简报归档](docs/screenshots/briefing-archive.png)
+
+### 知识问答
+
+![知识问答](docs/screenshots/knowledge-qa.png)
+
+### 数据看板
+
+![数据看板](docs/screenshots/data-dashboard.png)
+
 ## 主要功能
 
 - **信息采集**：接入 GitHub、Hugging Face、DEV Community、Hacker News 和 arXiv，保留来源链接与采集记录。
